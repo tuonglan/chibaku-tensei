@@ -56,6 +56,10 @@ module DocTruyen
 
             threads.each {|t| t.join()}
         end
+
+        def close
+            @scraper_driver.close
+        end
     end
 
     def self.get_chapter_list sample_chapter
@@ -86,6 +90,7 @@ module DocTruyen
                         start_ts = Time.now.to_f
                         chap = Chapter.new chap_list[i]
                         chap.download(basedir, speed, callback)
+                        chap.close
                         puts "Chapter #{chap.name} downloaded in %.3f seconds" % (Time.now.to_f - start_ts)
                     end
                 }.call

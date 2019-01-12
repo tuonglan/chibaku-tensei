@@ -27,13 +27,16 @@ if __FILE__ == $0
     
     # If not specify list to download, print and exitj
     if not options[:download_list]
-        puts "There're #{chap_list.count} to download, please set a range to download"
-        exit 0
+        puts "There're #{chap_list.count} chapters to download, please set a range to download, ENTER to exit"
+        puts "\tFormat \"start-end\""
+        ls = gets.chomp
+        exit if ls == ''
+        options[:download_list] = ls
     end
 
     # Start downloading
-    puts "Start downloading..."
     start_chap, end_chap = options[:download_list].split('-').map(&:to_i)
+    puts "Start downloading from chapter #{start_chap} to chapter #{end_chap}..."
     DocTruyen.download_chapters(chap_list, start_chap-1, end_chap-1, "#{options[:base_dir]}/#{options[:title]}", 
                                 options[:concurrency], options[:speed], nil)
 end
