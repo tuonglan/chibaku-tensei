@@ -11,11 +11,12 @@ module DocTruyen
 
     class Chapter
         attr_reader :name
-        def initialize url
+        def initialize url, log_enabled=false
             # Get chapter name from url
             @url = url
             @name = url.split('/')[-1].split('-')[0..-2].join('-')
             @scraper_driver = Selenium::WebDriver.for(:chrome, options: S_OPTIONS)
+            @log_enabled = log_enabled
             
             @scraper_driver.get @url
             div_reader = @scraper_driver.find_element(:id, 'reader')
@@ -31,6 +32,7 @@ module DocTruyen
 
             idx = 0
             threads = []
+            error_list = []
             semaphore = Mutex.new
             conc = @image_urls.count if conc > @image_urls.count
             conc.times do |th_idx|
@@ -43,10 +45,25 @@ module DocTruyen
                                 idx += 1
                             end
 
-                            filename = "%s/%03d-%s" % [dirname, i, @image_urls[i].split('/')[-1]]
-                            open(@image_urls[i]) do |img|
-                                File.open(filename, 'wb') do |stream|
-                                    stream.write img.read
+                            effort_count = 0
+                            while true
+                                effort_count += 1
+                                begin
+                                    filename = "%s/%03d-%s" % [dirname, i, @image_urls[i].split('/')[-1]]
+                                    open(@image_urls[i]) do |img|
+                                        File.open(filename, 'wb') do |stream|
+                                            stream.write img.read
+                                        end
+                                    end
+                                    break
+                                rescue
+                                    if effort_count > 3
+                                        error_list << @image_urls[i]
+                                        break
+                                    end
+                                    if @log_enabled
+                                        puts "Error when trying to download #{@image_urls[i]}, try again #{effort_count}"
+                                    end
                                 end
                             end
                         end
@@ -55,6 +72,9 @@ module DocTruyen
             end
 
             threads.each {|t| t.join()}
+            if error_list.count > 0
+                raise Exception("Error list #{error_list.join(',')}")
+            end
         end
 
         def close
@@ -76,6 +96,7 @@ module DocTruyen
         idx = start_chap
         threads = []
         semaphore = Mutex.new
+        error_list = []
         conc = chap_list.count if conc > chap_list.count
         conc.times do
             threads << Thread.new do |th; i|
@@ -88,15 +109,34 @@ module DocTruyen
                         end
 
                         start_ts = Time.now.to_f
-                        chap = Chapter.new chap_list[i]
-                        chap.download(basedir, speed, callback)
-                        chap.close
-                        puts "Chapter #{chap.name} downloaded in %.3f seconds" % (Time.now.to_f - start_ts)
+                        begin
+                            chap = Chapter.new chap_list[i]
+                            chap.download(basedir, speed, callback)
+                            chap.close
+                            puts "Chapter #{chap.name} downloaded in %.3f seconds" % (Time.now.to_f - start_ts)
+                        rescue Exception => e
+                            chap_name = chap_list[i].split('/')[-1].split('-')[0..-2].join('-')
+                            txt = "Chapter #{chap_name}, index #{i+1}"
+                            error_list << txt
+                            puts "====> Error when downloading: #{txt}"
+                        end
                     end
                 }.call
             end
         end
 
         threads.each {|t| t.join()}
+        puts "Downloaded #{end_chap - start_chap + 1 - error_list.count} chapters of total #{end_chap-start_chap+1}"
+        puts "Chapters which has error when downloading"
+        puts error_list
+    end
+
+    def self.download_chapter chap_url, basedir, speed, callback
+        # Make the base dir
+        FileUtils.mkdir_p basedir unless File.directory? basedir
+        start_ts = Time.now.to_f
+        chap = Chapter.new(chap_url, true)
+        chap.download(basedir, speed, callback)
+        puts "Chapter #{chap.name} downloaded in %.3f seconds" % (Time.now.to_f - start_ts)
     end
 end
