@@ -15,11 +15,12 @@ if __FILE__ == $0
                 options[:chapter_url] = c
         end
         opts.on("-d", "--download_list R", "Specify list of chapter to download") {|d| options[:download_list] = d}
-        opts.on("o", "--download_type T", ['single', 'multiple'], "Set download type") {|o| options[:download_type] = o}
-        opts.on('t', '--concurrency R', "Set number of threadsj") {|t| options[:concurrency] = t.to_i}
+        opts.on("-o", "--download_type T", ['single', 'multiple'], "Set download type") {|o| options[:download_type] = o}
+        opts.on('-t', '--concurrency R', "Set number of threadsj") {|t| options[:concurrency] = t.to_i}
         opts.on('-b', '--base_dir R', "Set base dir for download") {|b| options[:base_dir] = b}
         opts.on('-n', '--title R', "Set comics name") {|n| options[:title] = n}
         opts.on('-s', '--speed R', "Set download speed") {|s| options[:speed] = s.to_i}
+        opts.on('-r', '--retry', 'Retry enabled') {|r| options[:retry] = r}
         
         opts.on('-h', '--help', 'Print this help') do puts opts; exit end
     end.parse!
@@ -43,7 +44,7 @@ if __FILE__ == $0
         start_chap, end_chap = options[:download_list].split('-').map(&:to_i)
         puts "Start downloading from chapter #{start_chap} to chapter #{end_chap}..."
         DocTruyen.download_chapters(chap_list, start_chap-1, end_chap-1, base_dir, 
-                                    options[:concurrency], options[:speed], nil)
+                                    options[:concurrency], options[:speed], nil, :retry => options.key?('retry'))
     elsif options[:download_type] == 'single'
         DocTruyen.download_chapter(options[:chapter_url], base_dir, options[:speed], nil)
     end

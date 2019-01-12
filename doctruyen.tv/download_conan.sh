@@ -1,3 +1,3 @@
 #! /bin/sh
 
-ruby main.rb --title conan --base_dir /tmp --chapter_url https://doctruyen.tv/truyen-tranh/conan-tham-tu-lung-danh/chap-446-p285096.html --download_list "1-3" --speed 10 --concurrency 3
+ruby main.rb --title conan --base_dir ~/MountZones/W10_Shared --chapter_url https://doctruyen.tv/truyen-tranh/conan-tham-tu-lung-danh/chap-173-p284820.html --speed 10 --concurrency 10 --retry

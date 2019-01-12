@@ -73,7 +73,8 @@ module DocTruyen
 
             threads.each {|t| t.join()}
             if error_list.count > 0
-                raise Exception("Error list #{error_list.join(',')}")
+                @scraper_driver.close
+                raise "Error list #{error_list.join(',')}"
             end
         end
 
@@ -88,7 +89,8 @@ module DocTruyen
         return doc_chap_list.map &:content
     end
 
-    def self.download_chapters chap_list, start_chap, end_chap, basedir, conc, speed, callback
+    def self.download_chapters chap_list, start_chap, end_chap, basedir, conc, speed, callback,
+                               retry: false
         # Make the base dir
         FileUtils.mkdir_p basedir unless File.directory? basedir
         
@@ -97,6 +99,7 @@ module DocTruyen
         threads = []
         semaphore = Mutex.new
         error_list = []
+        error_chap_list = []
         conc = chap_list.count if conc > chap_list.count
         conc.times do
             threads << Thread.new do |th; i|
@@ -116,8 +119,9 @@ module DocTruyen
                             puts "Chapter #{chap.name} downloaded in %.3f seconds" % (Time.now.to_f - start_ts)
                         rescue Exception => e
                             chap_name = chap_list[i].split('/')[-1].split('-')[0..-2].join('-')
-                            txt = "Chapter #{chap_name}, index #{i+1}"
+                            txt = "Chapter #{chap_name}, index #{i+1}, url: #{chap_list[i]}"
                             error_list << txt
+                            error_chap_list << chap_list[i]
                             puts "====> Error when downloading: #{txt}"
                         end
                     end
@@ -127,8 +131,20 @@ module DocTruyen
 
         threads.each {|t| t.join()}
         puts "Downloaded #{end_chap - start_chap + 1 - error_list.count} chapters of total #{end_chap-start_chap+1}"
-        puts "Chapters which has error when downloading"
+        puts "\nChapters which has error when downloading"
         puts error_list
+
+        if :retry
+            puts "\nRetrying error chapters..."
+            error_chap_list.sort.each do |chap|
+                begin
+                    puts "Start downloading chapter #{chap}..."
+                    download_chapter(chap, basedir, speed, callback)
+                rescue Exception => e
+                    puts "ERROR #{e}"
+                end
+            end
+        end
     end
 
     def self.download_chapter chap_url, basedir, speed, callback
