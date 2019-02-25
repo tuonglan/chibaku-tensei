@@ -8,6 +8,13 @@ require 'selenium-webdriver'
 
 module DocTruyen
     S_OPTIONS = Selenium::WebDriver::Chrome::Options.new(args: ['headless'])
+    class ChapterDownloadError < StandardError
+        attr_reader :message, :count
+        def initialize message, count
+            @count = count
+            @message = message
+        end
+    end
 
     class Chapter
         attr_reader :name
@@ -58,7 +65,7 @@ module DocTruyen
                                     break
                                 rescue
                                     if effort_count > 3
-                                        error_list << @image_urls[i]
+                                        semaphore.synchronize { error_list << @image_urls[i] }
                                         break
                                     end
                                     if @log_enabled
@@ -74,7 +81,7 @@ module DocTruyen
             threads.each {|t| t.join()}
             if error_list.count > 0
                 @scraper_driver.close
-                raise "Error list #{error_list.join(',')}"
+                raise ChapterDownloadError.new("Error list #{error_list.join(',')}", error_list.count)
             end
         end
 
@@ -90,7 +97,7 @@ module DocTruyen
     end
 
     def self.download_chapters chap_list, start_chap, end_chap, basedir, conc, speed, callback,
-                               retry: false
+                               try_again: false
         # Make the base dir
         FileUtils.mkdir_p basedir unless File.directory? basedir
         
@@ -117,11 +124,20 @@ module DocTruyen
                             chap.download(basedir, speed, callback)
                             chap.close
                             puts "Chapter #{chap.name} downloaded in %.3f seconds" % (Time.now.to_f - start_ts)
-                        rescue Exception => e
+                        rescue ChapterDownloadError => e
                             chap_name = chap_list[i].split('/')[-1].split('-')[0..-2].join('-')
-                            txt = "Chapter #{chap_name}, index #{i+1}, url: #{chap_list[i]}"
-                            error_list << txt
-                            error_chap_list << chap_list[i]
+                            txt = "Chapter #{chap_name}, index #{i+1}, url: #{chap_list[i]}, COUNT: #{e.count}"
+                            semaphore.synchronize do
+                                error_list << txt
+                                error_chap_list << chap_list[i]
+                            end
+                            puts "====> Error when downloading: #{txt}"
+                        rescue Exception => e
+                            txt = "CRITICAL ERROR: #{chap_list[i]}"
+                            semaphore.synchronize do
+                                error_list << txt
+                                error_chap_list << chap_list[i]
+                            end
                             puts "====> Error when downloading: #{txt}"
                         end
                     end
@@ -134,7 +150,7 @@ module DocTruyen
         puts "\nChapters which has error when downloading"
         puts error_list
 
-        if :retry
+        if try_again
             puts "\nRetrying error chapters..."
             error_chap_list.sort.each do |chap|
                 begin
